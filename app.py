@@ -12,8 +12,7 @@ st.write("Hazme cualquier consulta sobre la base de datos.")
 # Llama a la clave secreta que configuraremos en Streamlit
 API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
-
+model = genai.GenerativeModel('gemini-3.6-flash')
 # 3. CONECTAR TU PLANILLA
 @st.cache_data
 def cargar_datos():
