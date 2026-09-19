@@ -65,4 +65,4 @@ if pregunta and 'df' in locals():
             respuesta_placeholder.markdown(respuesta.text)
             st.session_state.mensajes.append({"role": "assistant", "content": respuesta.text})
         except Exception as e:
-            respuesta_placeholder.error("Error al consultar a Gemini.")
+            respuesta_placeholder.error(f"Error al consultar a Gemini: {e}")
