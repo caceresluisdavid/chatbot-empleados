@@ -47,15 +47,28 @@ if check_password():
     genai.configure(api_key=API_KEY)
     model = genai.GenerativeModel('gemini-3.6-flash')
 
-    # 4. CARGAR DATOS Y FORMATEAR ID
+    # 4. CARGAR DATOS Y FORMATEAR ID Y COORDENADAS
     @st.cache_data
     def cargar_datos():
         url = "https://docs.google.com/spreadsheets/d/1oiv8fN5SjlToafR0uhk37FG3uWRxfH2pcxnUMyaWO2E/export?format=csv&gid=0"
         df = pd.read_csv(url) 
         
+        # Formatear el ID (4 dígitos)
         col_id = df.columns[0]
         df[col_id] = pd.to_numeric(df[col_id], errors='coerce').fillna(0).astype(int)
         df[col_id] = df[col_id].apply(lambda x: f"{x:04d}")
+        
+        # Limpiar Coordenadas (Convertir texto con puntos a números reales flotantes)
+        if 'lat' in df.columns and 'lon' in df.columns:
+            # Quitamos los puntos separadores de miles y reemplazamos la coma por punto si es que hay.
+            df['lat'] = df['lat'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+            # Como le sacamos los puntos, volvemos a poner el decimal donde va (después del -29 o -57 en Argentina)
+            df['lat'] = df['lat'].apply(lambda x: x[:3] + '.' + x[3:] if x.startswith('-2') else x)
+            df['lat'] = pd.to_numeric(df['lat'], errors='coerce')
+            
+            df['lon'] = df['lon'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+            df['lon'] = df['lon'].apply(lambda x: x[:3] + '.' + x[3:] if x.startswith('-5') else x)
+            df['lon'] = pd.to_numeric(df['lon'], errors='coerce')
         
         return df
 
@@ -94,7 +107,6 @@ if check_password():
             
             historial_text = "\n".join([f"{m['role']}: {m.get('texto', 'Gráfico/Mapa generado')}" for m in st.session_state.mensajes[-5:]])
             
-            # PROMPT MAESTRO ACTUALIZADO (A prueba de errores de mapa)
             prompt = f"""
             Eres un Agente de Análisis de Datos experto en Python, Pandas y Plotly. 
             El usuario te hará una pregunta sobre un DataFrame llamado `df`.
