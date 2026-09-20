@@ -47,29 +47,48 @@ if check_password():
     genai.configure(api_key=API_KEY)
     model = genai.GenerativeModel('gemini-3.6-flash')
 
-    # 4. CARGAR DATOS Y FORMATEAR ID Y COORDENADAS
+    # 4. CARGAR DATOS Y FORMATEAR
     @st.cache_data
     def cargar_datos():
         url = "https://docs.google.com/spreadsheets/d/1oiv8fN5SjlToafR0uhk37FG3uWRxfH2pcxnUMyaWO2E/export?format=csv&gid=0"
         df = pd.read_csv(url) 
         
-        # Formatear el ID (4 dígitos)
+        # Formatear ID a 4 dígitos
         col_id = df.columns[0]
         df[col_id] = pd.to_numeric(df[col_id], errors='coerce').fillna(0).astype(int)
         df[col_id] = df[col_id].apply(lambda x: f"{x:04d}")
         
-        # Limpiar Coordenadas (Convertir texto con puntos a números reales flotantes)
-        if 'lat' in df.columns and 'lon' in df.columns:
-            # Quitamos los puntos separadores de miles y reemplazamos la coma por punto si es que hay.
-            df['lat'] = df['lat'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-            # Como le sacamos los puntos, volvemos a poner el decimal donde va (después del -29 o -57 en Argentina)
-            df['lat'] = df['lat'].apply(lambda x: x[:3] + '.' + x[3:] if x.startswith('-2') else x)
-            df['lat'] = pd.to_numeric(df['lat'], errors='coerce')
+        # Limpieza a prueba de balas para Coordenadas
+        def limpiar_coord(val, prefijo):
+            # Si está vacío, lo ignoramos
+            if pd.isna(val): 
+                return None
             
-            df['lon'] = df['lon'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-            df['lon'] = df['lon'].apply(lambda x: x[:3] + '.' + x[3:] if x.startswith('-5') else x)
-            df['lon'] = pd.to_numeric(df['lon'], errors='coerce')
-        
+            # Lo pasamos a texto y le quitamos puntos y comas
+            s = str(val).replace('.', '').replace(',', '').strip()
+            if s == '' or s.lower() == 'nan': 
+                return None
+                
+            # Si es de Corrientes, rearmamos el decimal en su lugar correcto
+            if s.startswith(prefijo):
+                try:
+                    return float(s[:3] + '.' + s[3:])
+                except:
+                    return None
+            
+            # Si ya venía bien, lo devolvemos como número
+            try:
+                return float(s)
+            except:
+                return None
+
+        # Aplicamos la limpieza solo si existen las columnas lat y lon
+        if 'lat' in df.columns and 'lon' in df.columns:
+            # Latitud en Paso de los Libres empieza con -29...
+            df['lat'] = df['lat'].apply(lambda x: limpiar_coord(x, '-29'))
+            # Longitud en Paso de los Libres empieza con -57...
+            df['lon'] = df['lon'].apply(lambda x: limpiar_coord(x, '-57'))
+            
         return df
 
     try:
