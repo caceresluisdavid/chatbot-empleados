@@ -3,12 +3,12 @@ import pandas as pd
 import google.generativeai as genai
 import plotly.express as px
 
-# 1. CONTRASEÑA SEGURA (Busca CLAVE_ACCESO en los Secrets de Streamlit)
+# 1. CONTRASEÑA SEGURA
 def check_password():
     def password_entered():
         if st.session_state["password"] == st.secrets["CLAVE_ACCESO"]:
             st.session_state["password_correct"] = True
-            del st.session_state["password"] # Borramos la clave por seguridad
+            del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
 
@@ -24,13 +24,11 @@ def check_password():
     else:
         return True
 
-# Si la contraseña es correcta, mostramos la App:
 if check_password():
     
     # 2. DISEÑO Y LOGO CENTRADO
     st.set_page_config(page_title="Asistente de Registros 2.0", page_icon="🏢")
     
-    # Tres columnas invisibles para que el logo quede al medio
     col1, col2, col3 = st.columns([1,1,1])
     with col2:
         try:
@@ -40,7 +38,6 @@ if check_password():
 
     st.markdown("<h2 style='text-align: center; color: #1E88E5;'>Asistente de Datos 2.0 🤖</h2>", unsafe_allow_html=True)
     
-    # Botón para salir (cerrar sesión)
     if st.button("Cerrar Sesión"):
         st.session_state["password_correct"] = False
         st.rerun()
@@ -56,7 +53,6 @@ if check_password():
         url = "https://docs.google.com/spreadsheets/d/1oiv8fN5SjlToafR0uhk37FG3uWRxfH2pcxnUMyaWO2E/export?format=csv&gid=0"
         df = pd.read_csv(url) 
         
-        # Formatear la Columna 1 (ID) para que sean 4 dígitos fijos (Ej: 0001, 0025, 0100)
         col_id = df.columns[0]
         df[col_id] = pd.to_numeric(df[col_id], errors='coerce').fillna(0).astype(int)
         df[col_id] = df[col_id].apply(lambda x: f"{x:04d}")
@@ -84,11 +80,10 @@ if check_password():
             if "mapa" in msg and msg["mapa"] is not None:
                 st.map(msg["mapa"])
 
-    # 6. EL AGENTE PROGRAMADOR (Ejecución de Python en vivo)
+    # 6. EL AGENTE PROGRAMADOR
     pregunta = st.chat_input("Ej: ¿Cuántos tienen sobrepeso? o Grafica encuestados por barrio")
 
     if pregunta:
-        # Guardar en memoria la pregunta
         st.session_state.mensajes.append({"role": "user", "texto": pregunta})
         with st.chat_message("user"):
             st.markdown(pregunta)
@@ -97,10 +92,9 @@ if check_password():
             respuesta_placeholder = st.empty()
             respuesta_placeholder.markdown("Traduciendo a Python y calculando... ⏳")
             
-            # Recopilamos las últimas preguntas para memoria
             historial_text = "\n".join([f"{m['role']}: {m.get('texto', 'Gráfico/Mapa generado')}" for m in st.session_state.mensajes[-5:]])
             
-            # PROMPT MAESTRO
+            # PROMPT MAESTRO ACTUALIZADO (A prueba de errores de mapa)
             prompt = f"""
             Eres un Agente de Análisis de Datos experto en Python, Pandas y Plotly. 
             El usuario te hará una pregunta sobre un DataFrame llamado `df`.
@@ -109,13 +103,13 @@ if check_password():
             1. Escribe ÚNICAMENTE el código Python válido. CERO texto de relleno. NADA de etiquetas "```python", solo el código crudo.
             2. El código debe ejecutarse desde cero usando el DataFrame `df`.
             3. Guarda la respuesta en texto amigable dentro de una variable llamada `respuesta_final`.
-            4. GRÁFICOS: Si pide un gráfico, créalo usando Plotly Express (`px`) y guarda la figura en `grafico_final`.
-            5. MAPAS: Si pide un mapa, filtra el DataFrame para eliminar los registros vacíos usando `.dropna(subset=['lat', 'lon'])` y guarda el resultado en la variable `mapa_final`.
+            4. GRÁFICOS (Barras, Tortas, etc): Créalos usando Plotly Express (`px`) y guarda la figura en `grafico_final`. ¡PROHIBIDO USAR PLOTLY PARA MAPAS!
+            5. MAPAS: Si pide un mapa de ubicaciones, NO USES PLOTLY. Tu única tarea es filtrar el DataFrame para eliminar los registros vacíos usando `.dropna(subset=['lat', 'lon'])` y guardar el DataFrame resultante en la variable `mapa_final`.
             
             DICCIONARIO DE DATOS Y COLUMNAS:
             Columnas en 'df': {", ".join(df.columns.tolist())}
             - Columna 1 (ID): Es un String de 4 dígitos (ej: '0001').
-            - La tabla proviene de un relevamiento social (columnas.pdf). Contiene datos de viviendas, salud, ingresos e infraestructura. Deduce el significado por sus nombres.
+            - La tabla proviene de un relevamiento social. Contiene datos de viviendas, salud, ingresos e infraestructura. Deduce el significado por sus nombres.
             
             HISTORIAL DE LA CONVERSACIÓN:
             {historial_text}
@@ -124,26 +118,21 @@ if check_password():
             """
             
             try:
-                # 1. Generar el código
                 respuesta_gemini = model.generate_content(prompt)
                 codigo = respuesta_gemini.text.strip()
                 
-                # Limpiar marcas de formato
                 if codigo.startswith("```python"): codigo = codigo[9:]
                 if codigo.startswith("```"): codigo = codigo[3:]
                 if codigo.endswith("```"): codigo = codigo[:-3]
                 codigo = codigo.strip()
                 
-                # 2. Ejecutar código localmente
                 local_vars = {"df": df, "px": px, "pd": pd}
                 exec(codigo, globals(), local_vars)
                 
-                # 3. Extraer resultados
                 texto = local_vars.get("respuesta_final", "✅ Análisis procesado correctamente.")
                 grafico = local_vars.get("grafico_final", None)
                 mapa = local_vars.get("mapa_final", None)
                 
-                # 4. Mostrar en pantalla
                 respuesta_placeholder.empty()
                 st.markdown(texto)
                 if grafico is not None:
@@ -151,7 +140,6 @@ if check_password():
                 if mapa is not None:
                     st.map(mapa)
                 
-                # 5. Guardar en memoria
                 st.session_state.mensajes.append({
                     "role": "assistant", 
                     "texto": texto,
