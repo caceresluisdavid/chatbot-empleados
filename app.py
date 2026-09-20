@@ -6,7 +6,7 @@ import plotly.express as px
 # 1. CONTRASEÑA ESPECÍFICA (TeoCora1888)
 def check_password():
     def password_entered():
-        if st.session_state["password"] == "TeoCora1888":
+        if st.session_state["password"] == st.secrets["CLAVE_ACCESO"]:
             st.session_state["password_correct"] = True
             del st.session_state["password"] # Borramos la clave por seguridad
         else:
