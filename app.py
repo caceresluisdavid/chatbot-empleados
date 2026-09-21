@@ -42,13 +42,13 @@ if check_password():
         st.session_state["password_correct"] = False
         st.rerun()
 
-    # 3. CONFIGURACIÓN GEMINI
+    # 3. CONFIGURACIÓN GEMINI (1.5 FLASH)
     @st.cache_resource
     def inicializar_modelo():
         API_KEY = st.secrets["GEMINI_API_KEY"]
         genai.configure(api_key=API_KEY)
         return genai.GenerativeModel(
-            'gemini-3.6-flash',
+            'gemini-1.5-flash',
             generation_config={"temperature": 0.0}
         )
 
@@ -125,10 +125,10 @@ if check_password():
 Genera código Python para responder una consulta sobre un DataFrame cargado en memoria llamado `df`.
 
 REGLAS OBLIGATORIAS:
-1. Responde ÚNICAMENTE con el bloque de código Python. CERO texto de introducción o cierre. CERO comillas markdown como ```python.
+1. Responde ÚNICAMENTE con el bloque de código Python ejecutable. CERO texto de introducción o cierre. CERO bloques markdown como ```python.
 2. Guarda la conclusión o respuesta numérica en texto amigable dentro de la variable `respuesta_final`.
 3. Si la pregunta pide gráficos (barras, tortas, distribución), usa Plotly Express (`px`) y guárdalo en `grafico_final`.
-4. Si la pregunta pide ver en mapa o ubicaciones: NO USES PLOTLY. Haz: `mapa_final = df.dropna(subset=['lat', 'lon'])` (con los filtros necesarios aplicados).
+4. Si la pregunta pide ver en mapa o ubicaciones: NO USES PLOTLY. Haz: `mapa_final = df.dropna(subset=['lat', 'lon'])` (aplicando los filtros correspondientes si la consulta lo requiere).
 
 COLUMNAS DISPONIBLES EN 'df':
 {columnas_disponibles}
@@ -148,7 +148,7 @@ CONSULTA:
                     st.error(f"Error al conectar con la API de Gemini: {e}")
 
                 if codigo:
-                    # Eliminar bloques markdown si el modelo los agrega
+                    # Eliminar etiquetas markdown si el modelo las incluye
                     if codigo.startswith("```python"):
                         codigo = codigo[9:]
                     if codigo.startswith("```"):
@@ -180,6 +180,6 @@ CONSULTA:
                         })
 
                     except Exception as err_exec:
-                        st.error(f"Error al ejecutar el código: {err_exec}")
+                        st.error(f"Error al ejecutar el cálculo: {err_exec}")
                         with st.expander("Ver código ejecutado"):
                             st.code(codigo, language="python")
