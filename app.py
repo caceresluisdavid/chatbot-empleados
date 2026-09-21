@@ -42,17 +42,39 @@ if check_password():
         st.session_state["password_correct"] = False
         st.rerun()
 
-    # 3. CONFIGURACIÓN GEMINI (1.5 FLASH)
+    # 3. CONFIGURACIÓN GEMINI (AUTO-DETECCIÓN DE MODELO ACTIVO)
     @st.cache_resource
     def inicializar_modelo():
         API_KEY = st.secrets["GEMINI_API_KEY"]
         genai.configure(api_key=API_KEY)
+        
+        modelos_disponibles = [
+            m.name for m in genai.list_models() 
+            if 'generateContent' in m.supported_generation_methods
+        ]
+        
+        modelo_elegido = None
+        for m in modelos_disponibles:
+            if "flash" in m.lower():
+                modelo_elegido = m
+                break
+        
+        if not modelo_elegido and modelos_disponibles:
+            modelo_elegido = modelos_disponibles[0]
+            
+        if not modelo_elegido:
+            raise ValueError("No se encontraron modelos compatibles con generateContent.")
+
         return genai.GenerativeModel(
-            'gemini-1.5-flash',
+            modelo_elegido,
             generation_config={"temperature": 0.0}
         )
 
-    model = inicializar_modelo()
+    try:
+        model = inicializar_modelo()
+    except Exception as e:
+        st.error(f"Error al inicializar Gemini: {e}")
+        st.stop()
 
     # 4. CARGAR Y PREPARAR DATOS
     @st.cache_data
@@ -128,7 +150,7 @@ REGLAS OBLIGATORIAS:
 1. Responde ÚNICAMENTE con el bloque de código Python ejecutable. CERO texto de introducción o cierre. CERO bloques markdown como ```python.
 2. Guarda la conclusión o respuesta numérica en texto amigable dentro de la variable `respuesta_final`.
 3. Si la pregunta pide gráficos (barras, tortas, distribución), usa Plotly Express (`px`) y guárdalo en `grafico_final`.
-4. Si la pregunta pide ver en mapa o ubicaciones: NO USES PLOTLY. Haz: `mapa_final = df.dropna(subset=['lat', 'lon'])` (aplicando los filtros correspondientes si la consulta lo requiere).
+4. Si la pregunta pide ver en mapa o ubicaciones: NO USES PLOTLY. Haz: `mapa_final = df.dropna(subset=['lat', 'lon'])` (aplicando filtros si corresponde).
 
 COLUMNAS DISPONIBLES EN 'df':
 {columnas_disponibles}
@@ -148,7 +170,6 @@ CONSULTA:
                     st.error(f"Error al conectar con la API de Gemini: {e}")
 
                 if codigo:
-                    # Eliminar etiquetas markdown si el modelo las incluye
                     if codigo.startswith("```python"):
                         codigo = codigo[9:]
                     if codigo.startswith("```"):
