@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 import plotly.express as px
+import time
+from google.api_core.exceptions import ResourceExhausted
 
 # 1. CONTRASEÑA SEGURA
 def check_password():
@@ -29,11 +31,11 @@ if check_password():
     # 2. DISEÑO Y LOGO CENTRADO
     st.set_page_config(page_title="Asistente de Registros 2.0", page_icon="🏢")
     
-    col1, col2, col3 = st.columns([1,1,1])
+    col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         try:
             st.image("logo.png", use_container_width=True)
-        except:
+        except Exception:
             st.info("Sube tu archivo 'logo.png' a GitHub para que aparezca aquí.")
 
     st.markdown("<h2 style='text-align: center; color: #1E88E5;'>Asistente de Datos 2.0 🤖</h2>", unsafe_allow_html=True)
@@ -42,10 +44,17 @@ if check_password():
         st.session_state["password_correct"] = False
         st.rerun()
 
-    # 3. CONFIGURACIÓN GEMINI
-    API_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=API_KEY)
-    model = genai.GenerativeModel('gemini-3.6-flash')
+    # 3. CONFIGURACIÓN GEMINI CACHEADA
+    @st.cache_resource
+    def obtener_modelo():
+        API_KEY = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=API_KEY)
+        return genai.GenerativeModel(
+            'gemini-3.6-flash',
+            generation_config={"temperature": 0.0}
+        )
+
+    model = obtener_modelo()
 
     # 4. CARGAR DATOS Y FORMATEAR
     @st.cache_data
@@ -58,35 +67,25 @@ if check_password():
         df[col_id] = pd.to_numeric(df[col_id], errors='coerce').fillna(0).astype(int)
         df[col_id] = df[col_id].apply(lambda x: f"{x:04d}")
         
-        # Limpieza a prueba de balas para Coordenadas
+        # Limpieza para Coordenadas
         def limpiar_coord(val, prefijo):
-            # Si está vacío, lo ignoramos
             if pd.isna(val): 
                 return None
-            
-            # Lo pasamos a texto y le quitamos puntos y comas
             s = str(val).replace('.', '').replace(',', '').strip()
             if s == '' or s.lower() == 'nan': 
                 return None
-                
-            # Si es de Corrientes, rearmamos el decimal en su lugar correcto
             if s.startswith(prefijo):
                 try:
                     return float(s[:3] + '.' + s[3:])
-                except:
+                except Exception:
                     return None
-            
-            # Si ya venía bien, lo devolvemos como número
             try:
                 return float(s)
-            except:
+            except Exception:
                 return None
 
-        # Aplicamos la limpieza solo si existen las columnas lat y lon
         if 'lat' in df.columns and 'lon' in df.columns:
-            # Latitud en Paso de los Libres empieza con -29...
             df['lat'] = df['lat'].apply(lambda x: limpiar_coord(x, '-29'))
-            # Longitud en Paso de los Libres empieza con -57...
             df['lon'] = df['lon'].apply(lambda x: limpiar_coord(x, '-57'))
             
         return df
@@ -99,7 +98,7 @@ if check_password():
         st.error(f"Error al cargar la hoja: {e}")
         st.stop()
 
-    # 5. HISTORIAL MULTIMEDIA DEL CHAT
+    # 5. HISTORIAL VISUAL DEL CHAT
     if "mensajes" not in st.session_state:
         st.session_state.mensajes = []
 
@@ -112,7 +111,7 @@ if check_password():
             if "mapa" in msg and msg["mapa"] is not None:
                 st.map(msg["mapa"])
 
-    # 6. EL AGENTE PROGRAMADOR
+    # 6. EL AGENTE PROGRAMADOR (OPTIMIZADO CON REINTENTOS)
     pregunta = st.chat_input("Ej: ¿Cuántos tienen sobrepeso? o Grafica encuestados por barrio")
 
     if pregunta:
@@ -124,59 +123,75 @@ if check_password():
             respuesta_placeholder = st.empty()
             respuesta_placeholder.markdown("Traduciendo a Python y calculando... ⏳")
             
-            historial_text = "\n".join([f"{m['role']}: {m.get('texto', 'Gráfico/Mapa generado')}" for m in st.session_state.mensajes[-5:]])
-            
+            # Prompt reducido al mínimo estricto
+            columnas_disponibles = ", ".join(df.columns.tolist())
             prompt = f"""
-            Eres un Agente de Análisis de Datos experto en Python, Pandas y Plotly. 
-            El usuario te hará una pregunta sobre un DataFrame llamado `df`.
+Genera código Python para responder una consulta sobre un DataFrame `df`.
+
+REGLAS:
+1. Responde ÚNICAMENTE con código Python ejecutable, sin explicaciones ni markdown.
+2. Guarda el mensaje final en texto en la variable `respuesta_final`.
+3. Para gráficos (barras, tortas), usa Plotly Express (`px`) y guárdalo en `grafico_final`.
+4. Para mapas: NO USES PLOTLY. Haz `mapa_final = df.dropna(subset=['lat', 'lon'])`.
+
+COLUMNAS EN 'df':
+{columnas_disponibles}
+
+CONSULTA:
+{pregunta}
+"""
             
-            REGLAS ESTRICTAS DE RESPUESTA:
-            1. Escribe ÚNICAMENTE el código Python válido. CERO texto de relleno. NADA de etiquetas "```python", solo el código crudo.
-            2. El código debe ejecutarse desde cero usando el DataFrame `df`.
-            3. Guarda la respuesta en texto amigable dentro de una variable llamada `respuesta_final`.
-            4. GRÁFICOS (Barras, Tortas, etc): Créalos usando Plotly Express (`px`) y guarda la figura en `grafico_final`. ¡PROHIBIDO USAR PLOTLY PARA MAPAS!
-            5. MAPAS: Si pide un mapa de ubicaciones, NO USES PLOTLY. Tu única tarea es filtrar el DataFrame para eliminar los registros vacíos usando `.dropna(subset=['lat', 'lon'])` y guardar el DataFrame resultante en la variable `mapa_final`.
+            codigo = None
+            max_reintentos = 3
             
-            DICCIONARIO DE DATOS Y COLUMNAS:
-            Columnas en 'df': {", ".join(df.columns.tolist())}
-            - Columna 1 (ID): Es un String de 4 dígitos (ej: '0001').
-            - La tabla proviene de un relevamiento social. Contiene datos de viviendas, salud, ingresos e infraestructura. Deduce el significado por sus nombres.
+            # Sistema de resiliencia ante el límite de cuota (429)
+            for intento in range(max_reintentos):
+                try:
+                    respuesta_gemini = model.generate_content(prompt)
+                    codigo = respuesta_gemini.text.strip()
+                    break
+                except ResourceExhausted:
+                    if intento < max_reintentos - 1:
+                        respuesta_placeholder.markdown("⏳ Cuota momentáneamente saturada (límite de 5 consultas/min). Reintentando en 11 segundos...")
+                        time.sleep(11)
+                    else:
+                        respuesta_placeholder.error("Se superó el límite por minuto de la API gratuita. Por favor espera 30 segundos y vuelve a consultar.")
+                        st.stop()
+                except Exception as e:
+                    respuesta_placeholder.error(f"Error de conexión con la API: {e}")
+                    st.stop()
             
-            HISTORIAL DE LA CONVERSACIÓN:
-            {historial_text}
-            
-            Pregunta actual: {pregunta}
-            """
-            
-            try:
-                respuesta_gemini = model.generate_content(prompt)
-                codigo = respuesta_gemini.text.strip()
-                
-                if codigo.startswith("```python"): codigo = codigo[9:]
-                if codigo.startswith("```"): codigo = codigo[3:]
-                if codigo.endswith("```"): codigo = codigo[:-3]
-                codigo = codigo.strip()
-                
-                local_vars = {"df": df, "px": px, "pd": pd}
-                exec(codigo, globals(), local_vars)
-                
-                texto = local_vars.get("respuesta_final", "✅ Análisis procesado correctamente.")
-                grafico = local_vars.get("grafico_final", None)
-                mapa = local_vars.get("mapa_final", None)
-                
-                respuesta_placeholder.empty()
-                st.markdown(texto)
-                if grafico is not None:
-                    st.plotly_chart(grafico)
-                if mapa is not None:
-                    st.map(mapa)
-                
-                st.session_state.mensajes.append({
-                    "role": "assistant", 
-                    "texto": texto,
-                    "grafico": grafico,
-                    "mapa": mapa
-                })
-                
-            except Exception as e:
-                respuesta_placeholder.error(f"Se produjo un error al ejecutar el código. Intenta preguntar de otra manera. \nDetalle técnico: {e}")
+            if codigo:
+                try:
+                    # Limpieza de bloques de código
+                    if codigo.startswith("```python"):
+                        codigo = codigo[9:]
+                    if codigo.startswith("```"):
+                        codigo = codigo[3:]
+                    if codigo.endswith("```"):
+                        codigo = codigo[:-3]
+                    codigo = codigo.strip()
+                    
+                    local_vars = {"df": df, "px": px, "pd": pd}
+                    exec(codigo, globals(), local_vars)
+                    
+                    texto = local_vars.get("respuesta_final", "✅ Análisis procesado correctamente.")
+                    grafico = local_vars.get("grafico_final", None)
+                    mapa = local_vars.get("mapa_final", None)
+                    
+                    respuesta_placeholder.empty()
+                    st.markdown(texto)
+                    if grafico is not None:
+                        st.plotly_chart(grafico)
+                    if mapa is not None:
+                        st.map(mapa)
+                    
+                    st.session_state.mensajes.append({
+                        "role": "assistant", 
+                        "texto": texto,
+                        "grafico": grafico,
+                        "mapa": mapa
+                    })
+                    
+                except Exception as e:
+                    respuesta_placeholder.error(f"Error al ejecutar el código generado: {e}")
