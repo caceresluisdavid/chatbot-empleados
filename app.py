@@ -47,7 +47,6 @@ if check_password():
         if not st.session_state["admin_desbloqueado"]:
             clave_admin = st.text_input("Clave para ver DNI / Nombres:", type="password")
             if st.button("Desbloquear Datos Sensibles"):
-                # Si no pusiste CLAVE_ADMIN en secrets, usa TeoCora1888 por defecto
                 clave_valida = st.secrets.get("CLAVE_ADMIN", "AdminCora2026")
                 if clave_admin == clave_valida:
                     st.session_state["admin_desbloqueado"] = True
@@ -56,7 +55,7 @@ if check_password():
                 else:
                     st.error("Clave incorrecta.")
         else:
-            st.success("🔓 Modo Administrador Activo (DNI, nombres y apellidos visibles)")
+            st.success("🔓 Modo Administrador Activo (DNI y Nombres visibles)")
             if st.button("Ocultar Datos Sensibles"):
                 st.session_state["admin_desbloqueado"] = False
                 st.rerun()
@@ -79,17 +78,16 @@ if check_password():
 
     model = inicializar_modelo()
 
-    # 5. CARGAR Y PREPARAR DATOS (db_empleados con el método nativo de export)
+    # 5. CARGAR DATOS VÍA GVIZ (Directo desde Google Sheets sin publicar en la web)
     @st.cache_data
     def cargar_datos():
-        # URL exacta de exportación nativa de Google Sheets
-        url = "https://docs.google.com/spreadsheets/d/18UJi3469ijGR_fa4MKhsL9JoO57Qf82Xak4gAn9QL0Q/export?format=csv&gid=0"
-        df = pd.read_csv(url) 
+        url = "https://docs.google.com/spreadsheets/d/18UJi3469ijGR_fa4MKhsL9JoO57Qf82Xak4gAn9QL0Q/gviz/tq?tqx=out:csv&sheet=datos"
+        df = pd.read_csv(url)
         
         # Eliminar filas completamente en blanco
         df = df.dropna(how='all')
 
-        # Formatear ID a 4 dígitos solo si la celda tiene valor real
+        # Formatear ID a 4 dígitos descartando celdas vacías
         col_id = df.columns[0]
         df = df[df[col_id].notna()]
         df = df[df[col_id].astype(str).str.strip() != '']
@@ -124,10 +122,9 @@ if check_password():
         df_raw = cargar_datos()
     except Exception as e:
         st.error(f"Error al cargar la hoja: {e}")
-        st.info("Asegúrate de que la hoja db_empleados esté compartida como: 'Cualquier persona con el enlace' -> 'Lector'")
         st.stop()
 
-    # Filtro de seguridad en memoria
+    # Filtro de protección según el estado de la sesión
     columnas_sensibles = ['dni', 'apellido', 'nombres']
     if st.session_state["admin_desbloqueado"]:
         df = df_raw.copy()
