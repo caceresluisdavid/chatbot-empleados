@@ -81,7 +81,6 @@ if check_password():
     # 5. CARGAR DATOS DIRECTOS DESDE GOOGLE SHEETS
     @st.cache_data
     def cargar_datos():
-        # URL exacta con el ID corregido de db_empleados
         url = "https://docs.google.com/spreadsheets/d/18UJi3469ijGR_fA4MKhsL9Jo0S7Qf82Xak4gAn9QL0Q/export?format=csv&gid=0"
         df = pd.read_csv(url)
         
@@ -96,26 +95,12 @@ if check_password():
         df = df.dropna(subset=[col_id])
         df[col_id] = df[col_id].astype(int).apply(lambda x: f"{x:04d}")
         
-        # Limpieza de Coordenadas
-        def limpiar_coord(val, prefijo):
-            if pd.isna(val): 
-                return None
-            s = str(val).replace('.', '').replace(',', '').strip()
-            if s == '' or s.lower() == 'nan': 
-                return None
-            if s.startswith(prefijo):
-                try:
-                    return float(s[:3] + '.' + s[3:])
-                except Exception:
-                    return None
-            try:
-                return float(s)
-            except Exception:
-                return None
-
+        # Coordenadas limpias directas
         if 'lat' in df.columns and 'lon' in df.columns:
-            df['lat'] = df['lat'].apply(lambda x: limpiar_coord(x, '-29'))
-            df['lon'] = df['lon'].apply(lambda x: limpiar_coord(x, '-57'))
+            df['lat'] = df['lat'].astype(str).str.replace(',', '.').str.strip()
+            df['lon'] = df['lon'].astype(str).str.replace(',', '.').str.strip()
+            df['lat'] = pd.to_numeric(df['lat'], errors='coerce')
+            df['lon'] = pd.to_numeric(df['lon'], errors='coerce')
             
         return df
 
@@ -190,9 +175,9 @@ Genera código Python para responder una consulta sobre un DataFrame cargado en 
 REGLAS OBLIGATORIAS:
 1. Responde ÚNICAMENTE con el bloque de código Python ejecutable. CERO texto de introducción o cierre. CERO bloques markdown como ```python.
 2. Guarda la conclusión o respuesta numérica en texto amigable dentro de la variable `respuesta_final`.
-3. BÚSQUEDAS DE TEXTO FLEXIBLES: Muchas columnas contienen texto múltiple o abreviado (por ejemplo, 'Transp. público' en vez de 'transporte público', o varios elementos separados por coma). NUNCA uses comparación exacta `==` en columnas de texto. Usa siempre `.astype(str).str.contains(r'patron', case=False, na=False)` buscando la raíz de las palabras clave o expresiones regulares que contemplen abreviaturas comunes.
+3. BÚSQUEDAS DE TEXTO FLEXIBLES: Muchas columnas contienen texto múltiple o abreviado. NUNCA uses comparación exacta `==` en columnas de texto. Usa siempre `.astype(str).str.contains(r'patron', case=False, na=False)` buscando la raíz de las palabras clave o expresiones regulares que contemplen abreviaturas comunes.
 4. Si la pregunta pide gráficos (barras, tortas, distribución), usa Plotly Express (`px`) y guárdalo en `grafico_final`.
-5. Si la pregunta pide ver en mapa o ubicaciones: NO USES PLOTLY. Haz: `mapa_final = df.dropna(subset=['lat', 'lon'])` (con filtros aplicados si corresponde).
+5. Si la pregunta pide ver en mapa o ubicaciones de IDs o registros: NO USES PLOTLY. Genera `mapa_final = df_filtrado[['lat', 'lon']].dropna()`. Si el mapa queda vacío, informa claramente en `respuesta_final`.
 
 COLUMNAS DISPONIBLES EN 'df':
 {columnas_disponibles}
