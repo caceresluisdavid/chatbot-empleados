@@ -38,7 +38,7 @@ if check_password():
 
     st.markdown("<h2 style='text-align: center; color: #1E88E5;'>Asistente de Datos 2.0 🤖</h2>", unsafe_allow_html=True)
 
-    # 3. CONTROL DE DATOS SENSIBLES EN BARRA LATERAL
+    # 3. CONTROL DE DATOS SENSIBLES EN SIDEBAR
     if "admin_desbloqueado" not in st.session_state:
         st.session_state["admin_desbloqueado"] = False
 
@@ -47,7 +47,9 @@ if check_password():
         if not st.session_state["admin_desbloqueado"]:
             clave_admin = st.text_input("Clave para ver DNI / Nombres:", type="password")
             if st.button("Desbloquear Datos Sensibles"):
-                if clave_admin == st.secrets.get("CLAVE_ADMIN", "AdminCora2026"):
+                # Si no pusiste CLAVE_ADMIN en secrets, usa TeoCora1888 por defecto
+                clave_valida = st.secrets.get("CLAVE_ADMIN", "AdminCora2026")
+                if clave_admin == clave_valida:
                     st.session_state["admin_desbloqueado"] = True
                     st.success("✅ Datos sensibles desbloqueados.")
                     st.rerun()
@@ -77,16 +79,23 @@ if check_password():
 
     model = inicializar_modelo()
 
-    # 5. CARGAR LA BASE DE DATOS COMPLETA (db_empleados)
+    # 5. CARGAR Y PREPARAR DATOS (db_empleados con el método nativo de export)
     @st.cache_data
-    def cargar_datos_completos():
-        url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTI1_HYlETtMdr7XvihhbC1prkNq9nvE9cARLPLP41wQJ0XwN-rDcLpJMeJ8GDcxfwmcFtuQgiq23K_/pub?gid=0&single=true&output=csv"
+    def cargar_datos():
+        # URL exacta de exportación nativa de Google Sheets
+        url = "https://docs.google.com/spreadsheets/d/18UJi3469ijGR_fa4MKhsL9JoO57Qf82Xak4gAn9QL0Q/export?format=csv&gid=0"
         df = pd.read_csv(url) 
         
-        # Formatear ID a 4 dígitos
+        # Eliminar filas completamente en blanco
+        df = df.dropna(how='all')
+
+        # Formatear ID a 4 dígitos solo si la celda tiene valor real
         col_id = df.columns[0]
-        df[col_id] = pd.to_numeric(df[col_id], errors='coerce').fillna(0).astype(int)
-        df[col_id] = df[col_id].apply(lambda x: f"{x:04d}")
+        df = df[df[col_id].notna()]
+        df = df[df[col_id].astype(str).str.strip() != '']
+        df[col_id] = pd.to_numeric(df[col_id], errors='coerce')
+        df = df.dropna(subset=[col_id])
+        df[col_id] = df[col_id].astype(int).apply(lambda x: f"{x:04d}")
         
         # Limpieza de Coordenadas
         def limpiar_coord(val, prefijo):
@@ -112,21 +121,21 @@ if check_password():
         return df
 
     try:
-        df_raw = cargar_datos_completos()
+        df_raw = cargar_datos()
     except Exception as e:
         st.error(f"Error al cargar la hoja: {e}")
+        st.info("Asegúrate de que la hoja db_empleados esté compartida como: 'Cualquier persona con el enlace' -> 'Lector'")
         st.stop()
 
-    # Filtro de protección según el estado de la sesión
+    # Filtro de seguridad en memoria
     columnas_sensibles = ['dni', 'apellido', 'nombres']
     if st.session_state["admin_desbloqueado"]:
         df = df_raw.copy()
     else:
-        # Se remueven las columnas de identidad si no es admin
         cols_a_borrar = [c for c in columnas_sensibles if c in df_raw.columns]
         df = df_raw.drop(columns=cols_a_borrar)
 
-    with st.expander("Ver primeros datos (Vista actual en memoria)"):
+    with st.expander("Ver primeros datos (Nota: Los IDs ya tienen formato 4 dígitos)"):
         st.dataframe(df.head())
 
     # 6. HISTORIAL VISUAL DEL CHAT
@@ -150,7 +159,6 @@ if check_password():
     pregunta = st.chat_input("Haceme un gráfico de torta con el nivel de estudios")
 
     if pregunta:
-        # Interceptar preguntas sobre datos sensibles si no está autorizado
         palabras_sensibles = ["dni", "documento", "apellido", "nombre"]
         pregunta_lower = pregunta.lower()
         requiere_sensibles = any(p in pregunta_lower for p in palabras_sensibles)
