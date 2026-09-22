@@ -78,13 +78,14 @@ if check_password():
 
     model = inicializar_modelo()
 
-    # 5. CARGAR DATOS VÍA GVIZ (Directo desde Google Sheets sin publicar en la web)
+    # 5. CARGAR DATOS DIRECTOS DESDE GOOGLE SHEETS
     @st.cache_data
     def cargar_datos():
-        url = "https://docs.google.com/spreadsheets/d/18UJi3469ijGR_fa4MKhsL9JoO57Qf82Xak4gAn9QL0Q/gviz/tq?tqx=out:csv&sheet=datos"
+        # URL exacta con el ID corregido de db_empleados
+        url = "https://docs.google.com/spreadsheets/d/18UJi3469ijGR_fA4MKhsL9Jo0S7Qf82Xak4gAn9QL0Q/export?format=csv&gid=0"
         df = pd.read_csv(url)
         
-        # Eliminar filas completamente en blanco
+        # Eliminar filas vacías
         df = df.dropna(how='all')
 
         # Formatear ID a 4 dígitos descartando celdas vacías
