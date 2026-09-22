@@ -80,7 +80,7 @@ if check_password():
     # 5. CARGAR LA BASE DE DATOS COMPLETA (db_empleados)
     @st.cache_data
     def cargar_datos_completos():
-        url = "https://docs.google.com/spreadsheets/d/18UJi3469ijGR_fa4MKhsL9JoO57Qf82Xak4gAn9QL0Q/export?format=csv&gid=0"
+        url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTI1_HYlETtMdr7XvihhbC1prkNq9nvE9cARLPLP41wQJ0XwN-rDcLpJMeJ8GDcxfwmcFtuQgiq23K_/pub?gid=0&single=true&output=csv"
         df = pd.read_csv(url) 
         
         # Formatear ID a 4 dígitos
@@ -129,7 +129,7 @@ if check_password():
     with st.expander("Ver primeros datos (Vista actual en memoria)"):
         st.dataframe(df.head())
 
-    # 6. HISTORIAL VISUAL DEL CHAT (AVATARES PERSONALIZADOS)
+    # 6. HISTORIAL VISUAL DEL CHAT (AVATAR ILUSTRADO DE LA CHICA RUBIA)
     AVATAR_USER = "https://api.dicebear.com/7.x/avataaars/png?seed=Luna&skinColor=f8d25c&hairColor=ffd15c&top=longHairStraightStrand"
     AVATAR_BOT = "assistant"
 
