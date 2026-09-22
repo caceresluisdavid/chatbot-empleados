@@ -84,7 +84,7 @@ if check_password():
         url = "https://docs.google.com/spreadsheets/d/18UJi3469ijGR_fA4MKhsL9Jo0S7Qf82Xak4gAn9QL0Q/export?format=csv&gid=0"
         df = pd.read_csv(url)
         
-        # Eliminar filas vacías
+        # Eliminar filas completamente en blanco
         df = df.dropna(how='all')
 
         # Formatear ID a 4 dígitos descartando celdas vacías
@@ -95,7 +95,7 @@ if check_password():
         df = df.dropna(subset=[col_id])
         df[col_id] = df[col_id].astype(int).apply(lambda x: f"{x:04d}")
         
-        # Coordenadas limpias directas
+        # Limpieza de Coordenadas
         if 'lat' in df.columns and 'lon' in df.columns:
             df['lat'] = df['lat'].astype(str).str.replace(',', '.').str.strip()
             df['lon'] = df['lon'].astype(str).str.replace(',', '.').str.strip()
@@ -175,9 +175,11 @@ Genera código Python para responder una consulta sobre un DataFrame cargado en 
 REGLAS OBLIGATORIAS:
 1. Responde ÚNICAMENTE con el bloque de código Python ejecutable. CERO texto de introducción o cierre. CERO bloques markdown como ```python.
 2. Guarda la conclusión o respuesta numérica en texto amigable dentro de la variable `respuesta_final`.
-3. BÚSQUEDAS DE TEXTO FLEXIBLES: Muchas columnas contienen texto múltiple o abreviado. NUNCA uses comparación exacta `==` en columnas de texto. Usa siempre `.astype(str).str.contains(r'patron', case=False, na=False)` buscando la raíz de las palabras clave o expresiones regulares que contemplen abreviaturas comunes.
+3. MAPEO DE GÉNERO Y BÚSQUEDAS:
+   - En la columna `genero`, los varones/hombres están registrados como 'M' y las mujeres como 'F'. Al buscar hombres/varones filtra con `df['genero'].astype(str).str.upper().str.strip() == 'M'`. Para mujeres usa `'F'`.
+   - Para columnas de texto con valores múltiples o abreviados (ej. 'movilidad' con 'Transp. público'), NUNCA uses comparación exacta `==`. Usa siempre `.astype(str).str.contains(r'patron', case=False, na=False)`.
 4. Si la pregunta pide gráficos (barras, tortas, distribución), usa Plotly Express (`px`) y guárdalo en `grafico_final`.
-5. Si la pregunta pide ver en mapa o ubicaciones de IDs o registros: NO USES PLOTLY. Genera `mapa_final = df_filtrado[['lat', 'lon']].dropna()`. Si el mapa queda vacío, informa claramente en `respuesta_final`.
+5. Si la pregunta pide mapa o ubicaciones: NO USES PLOTLY. Genera `mapa_final = df_filtrado[['lat', 'lon']].dropna()`. Si no hay coordenadas válidas tras el filtrado, indícalo claramente en `respuesta_final`.
 
 COLUMNAS DISPONIBLES EN 'df':
 {columnas_disponibles}
