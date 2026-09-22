@@ -129,8 +129,8 @@ if check_password():
     with st.expander("Ver primeros datos (Vista actual en memoria)"):
         st.dataframe(df.head())
 
-    # 6. HISTORIAL VISUAL DEL CHAT (AVATAR ILUSTRADO DE LA CHICA RUBIA)
-    AVATAR_USER = "https://api.dicebear.com/7.x/avataaars/png?seed=Luna&skinColor=f8d25c&hairColor=ffd15c&top=longHairStraightStrand"
+    # 6. HISTORIAL VISUAL DEL CHAT
+    AVATAR_USER = "👱🏻‍♀️"
     AVATAR_BOT = "assistant"
 
     if "mensajes" not in st.session_state:
@@ -184,8 +184,9 @@ Genera código Python para responder una consulta sobre un DataFrame cargado en 
 REGLAS OBLIGATORIAS:
 1. Responde ÚNICAMENTE con el bloque de código Python ejecutable. CERO texto de introducción o cierre. CERO bloques markdown como ```python.
 2. Guarda la conclusión o respuesta numérica en texto amigable dentro de la variable `respuesta_final`.
-3. Si la pregunta pide gráficos (barras, tortas, distribución), usa Plotly Express (`px`) y guárdalo en `grafico_final`.
-4. Si la pregunta pide ver en mapa o ubicaciones: NO USES PLOTLY. Haz: `mapa_final = df.dropna(subset=['lat', 'lon'])` (con filtros aplicados si corresponde).
+3. BÚSQUEDAS DE TEXTO FLEXIBLES: Muchas columnas contienen texto múltiple o abreviado (por ejemplo, 'Transp. público' en vez de 'transporte público', o varios elementos separados por coma). NUNCA uses comparación exacta `==` en columnas de texto. Usa siempre `.astype(str).str.contains(r'patron', case=False, na=False)` buscando la raíz de las palabras clave o expresiones regulares que contemplen abreviaturas comunes.
+4. Si la pregunta pide gráficos (barras, tortas, distribución), usa Plotly Express (`px`) y guárdalo en `grafico_final`.
+5. Si la pregunta pide ver en mapa o ubicaciones: NO USES PLOTLY. Haz: `mapa_final = df.dropna(subset=['lat', 'lon'])` (con filtros aplicados si corresponde).
 
 COLUMNAS DISPONIBLES EN 'df':
 {columnas_disponibles}
